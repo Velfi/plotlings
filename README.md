@@ -10,6 +10,8 @@ Rust is required. To export to SVG, set the `SVG_EXPORT_DIRECTORY` environment v
 
 ### Striped Columns
 
+![Striped Columns](/previews/striped_columns.png)
+
 The first one I created for this project. It generates columns of lines that look neat.
 
 [AxiDraw V3]: https://shop.evilmadscientist.com/productsmenu/846
