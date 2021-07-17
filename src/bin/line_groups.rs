@@ -16,7 +16,7 @@ fn main() {
     nannou::app(model).update(update).run();
 }
 
-type PointColumns = Vec<Vec<Vector2>>;
+type PointColumns = Vec<Vec<Vec2>>;
 
 struct Model {
     ui: Ui,
@@ -39,6 +39,7 @@ widget_ids! {
         toggle_viewbox,
         vertical_jitter,
         width,
+        column_width,
     }
 }
 
@@ -86,6 +87,7 @@ struct PointColumnParams {
     pub points_per_line: usize,
     pub vertical_jitter: f32,
     pub width: f32,
+    pub column_width: f32,
     pub column_alignment: f32,
 }
 
@@ -101,64 +103,12 @@ impl Default for PointColumnParams {
             vertical_jitter: 0.0,
             width: 1000.0,
             column_alignment: 0.0,
+            column_width: 125.0,
         }
     }
 }
 
-// fn generate_point_columns(params: &PointColumnParams) -> Vec<Vec<Vector2<f32>>> {
-//     let PointColumnParams {
-//         height,
-//         lines_per_column,
-//         noise_seed,
-//         number_of_columns,
-//         vertical_jitter,
-//         points_per_line,
-//         width,
-//         column_spacing,
-//     } = params;
-//
-//     let mut columns = Vec::with_capacity(*number_of_columns);
-//     let number_of_spaces = (number_of_columns - 1) as f32;
-//     let width_sans_spaces = width - (number_of_spaces * *column_spacing);
-//     let column_width = width_sans_spaces / *number_of_columns as f32;
-//     let horizontal_line_spacing = column_width / *points_per_line as f32;
-//     let vertical_line_spacing = height / *points_per_line as f32;
-//     let (half_width, half_height) = (width / 2.0, height / 2.0);
-//
-//     for column_index in 0..*number_of_columns {
-//         let mut column = Vec::with_capacity(*lines_per_column);
-//         let column_horizontal_origin = column_index as f32 * (column_width + column_spacing);
-//         let mut spacing_scales = Vec::with_capacity(*points_per_line);
-//
-//         for _ in 0..*points_per_line {
-//             let scale = horizontal_line_spacing * (random_f32() - 0.5) * 2.0;
-//             spacing_scales.push(scale);
-//         }
-//
-//         for line_index in 0..*lines_per_column {
-//             let mut line = Vec::with_capacity(*points_per_line);
-//             let line_horizontal_origin = line_index as f32 * horizontal_line_spacing;
-//
-//             for p in 0..*points_per_line {
-//                 let point = Vector2::new(
-//                     spacing_scales[p] + column_horizontal_origin + line_horizontal_origin
-//                         - half_width,
-//                     p as f32 * vertical_line_spacing - half_height,
-//                 );
-//
-//                 line.push(point);
-//             }
-//
-//             column.push(line);
-//         }
-//
-//         columns.append(&mut column);
-//     }
-//
-//     columns
-// }
-
-fn generate_point_columns(params: &PointColumnParams) -> Vec<Vec<Vector2<f32>>> {
+fn generate_point_columns(params: &PointColumnParams) -> PointColumns {
     let mut lines = Vec::new();
     let mut rng: StdRng = SeedableRng::seed_from_u64(params.noise_seed);
     let (origin_x, origin_y) = (params.width * -0.5, params.height * -0.5);
@@ -183,12 +133,12 @@ fn generate_point_column(
     origin_y: f32,
     params: &PointColumnParams,
     rng: &mut impl Rng,
-) -> Vec<Vec<Vector2<f32>>> {
+) -> PointColumns {
     let vertical_spacing = params.height / params.points_per_line as f32;
     let mut column_section_widths = Vec::new();
 
     for _ in 0..params.points_per_line {
-        let column_section_width = 125.0 * rng.gen_range(0.3..1.2) as f32;
+        let column_section_width = params.column_width * rng.gen_range(0.3..1.0) as f32;
 
         column_section_widths.push(column_section_width);
     }
@@ -205,7 +155,7 @@ fn generate_point_column(
             let x = line_spacing + origin_x + half_width;
             let y = point_index as f32 * vertical_spacing + origin_y;
 
-            line.push(Vector2::new(x, y));
+            line.push(Vec2::new(x, y));
         }
 
         lines.push(line);
@@ -274,6 +224,15 @@ fn update_ui(model: &mut Model) {
         .set(model.ids.width, ui)
     {
         model.point_column_params.width = width;
+        should_refresh_point_columns = true;
+    }
+
+    if let Some(column_width) = dialer(model.point_column_params.column_width, 0.0, 1000.0)
+        .down(10.0)
+        .label("column_column_width")
+        .set(model.ids.column_width, ui)
+    {
+        model.point_column_params.column_width = column_width;
         should_refresh_point_columns = true;
     }
 
