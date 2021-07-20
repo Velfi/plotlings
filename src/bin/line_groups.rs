@@ -1,5 +1,6 @@
 use anyhow::Context;
 use chrono::Local;
+use lib_plotings::Interpolate;
 use log::{debug, error, info, trace, warn};
 use nannou::{prelude::*, ui::prelude::*};
 use rand::{prelude::StdRng, Rng, SeedableRng};
@@ -18,6 +19,43 @@ fn main() {
 
 type PointColumns = Vec<Vec<Vec2>>;
 
+#[derive(Debug, PartialEq, Clone)]
+struct PointColumnParams {
+    pub chaikin_smoothing: bool,
+    pub chaikin_smoothing_iterations: u8,
+    pub chaikin_smoothing_ratio: f32,
+    pub column_alignment: f32,
+    pub column_spacing: f32,
+    pub column_width: f32,
+    pub height: f32,
+    pub lines_per_column: usize,
+    pub noise_seed: u64,
+    pub number_of_columns: usize,
+    pub points_per_line: usize,
+    pub vertical_jitter: f32,
+    pub width: f32,
+}
+
+impl Default for PointColumnParams {
+    fn default() -> Self {
+        Self {
+            chaikin_smoothing: false,
+            chaikin_smoothing_iterations: 4,
+            chaikin_smoothing_ratio: 0.25,
+            column_alignment: 0.0,
+            column_spacing: 80.0,
+            column_width: 125.0,
+            height: 1000.0,
+            lines_per_column: 16,
+            noise_seed: 0,
+            number_of_columns: 8,
+            points_per_line: 16,
+            vertical_jitter: 0.0,
+            width: 1000.0,
+        }
+    }
+}
+
 struct Model {
     ui: Ui,
     ids: Ids,
@@ -28,8 +66,11 @@ struct Model {
 
 widget_ids! {
     struct Ids {
+        chaikin_smoothing,
+        chaikin_smoothing_ratio,
         column_alignment,
         column_spacing,
+        column_width,
         export_svg,
         height,
         lines_per_column,
@@ -39,7 +80,6 @@ widget_ids! {
         toggle_viewbox,
         vertical_jitter,
         width,
-        column_width,
     }
 }
 
@@ -77,37 +117,6 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-struct PointColumnParams {
-    pub column_spacing: f32,
-    pub height: f32,
-    pub lines_per_column: usize,
-    pub noise_seed: u64,
-    pub number_of_columns: usize,
-    pub points_per_line: usize,
-    pub vertical_jitter: f32,
-    pub width: f32,
-    pub column_width: f32,
-    pub column_alignment: f32,
-}
-
-impl Default for PointColumnParams {
-    fn default() -> Self {
-        Self {
-            column_spacing: 80.0,
-            height: 1000.0,
-            lines_per_column: 16,
-            noise_seed: 0,
-            number_of_columns: 8,
-            points_per_line: 16,
-            vertical_jitter: 0.0,
-            width: 1000.0,
-            column_alignment: 0.0,
-            column_width: 125.0,
-        }
-    }
-}
-
 fn generate_point_columns(params: &PointColumnParams) -> PointColumns {
     let mut lines = Vec::new();
     let mut rng: StdRng = SeedableRng::seed_from_u64(params.noise_seed);
@@ -135,6 +144,8 @@ fn generate_point_column(
     rng: &mut impl Rng,
 ) -> PointColumns {
     let vertical_spacing = params.height / params.points_per_line as f32;
+    let chaikin_smoothing_iterations = params.chaikin_smoothing_iterations;
+    let chaikin_smoothing_ratio = params.chaikin_smoothing_ratio;
     let mut column_section_widths = Vec::new();
 
     for _ in 0..params.points_per_line {
@@ -146,22 +157,135 @@ fn generate_point_column(
     let mut lines = Vec::new();
 
     for line_index in 0..params.lines_per_column {
-        let mut line = Vec::new();
+        let mut line = generate_line(
+            &column_section_widths,
+            line_index,
+            origin_x,
+            origin_y,
+            vertical_spacing,
+            params,
+        );
 
-        for point_index in 0..params.points_per_line {
-            let column_width = column_section_widths[point_index];
-            let line_spacing = line_index as f32 * (column_width / params.lines_per_column as f32);
-            let half_width = (column_width / 2.0) * (params.column_alignment - 1.0);
-            let x = line_spacing + origin_x + half_width;
-            let y = point_index as f32 * vertical_spacing + origin_y;
-
-            line.push(Vec2::new(x, y));
-        }
+        if params.chaikin_smoothing {
+            line = generate_smooth_line(
+                line,
+                &column_section_widths,
+                line_index,
+                origin_x,
+                origin_y,
+                vertical_spacing,
+                params,
+                chaikin_smoothing_iterations,
+                chaikin_smoothing_ratio,
+            );
+        };
 
         lines.push(line);
     }
 
     lines
+}
+
+fn generate_line(
+    column_section_widths: &[f32],
+    line_index: usize,
+    origin_x: f32,
+    origin_y: f32,
+    vertical_spacing: f32,
+    params: &PointColumnParams,
+) -> Vec<Vec2> {
+    let mut line = Vec::new();
+
+    for point_index in 0..params.points_per_line {
+        let column_width = column_section_widths[point_index];
+        let line_spacing = line_index as f32 * (column_width / params.lines_per_column as f32);
+        let half_width = (column_width / 2.0) * (params.column_alignment - 1.0);
+        let x = line_spacing + origin_x + half_width;
+        let y = point_index as f32 * vertical_spacing + origin_y;
+
+        line.push(Vec2::new(x, y));
+    }
+
+    line
+}
+
+fn generate_smooth_line(
+    line: Vec<Vec2>,
+    column_section_widths: &[f32],
+    line_index: usize,
+    origin_x: f32,
+    origin_y: f32,
+    vertical_spacing: f32,
+    params: &PointColumnParams,
+    iterations: u8,
+    ratio: f32,
+) -> Vec<Vec2> {
+    if iterations == 0 {
+        return line;
+    }
+
+    let num_corners = line.len() - 1;
+
+    let mut smoothed_line = Vec::with_capacity(line.len() * 2);
+
+    for i in 0..num_corners {
+        // Get the i'th and (i+1)'th vertex to work on that edge.
+        let a = line.get(i).unwrap();
+        let b = line.get(i + 1).or_else(|| line.get(1)).unwrap();
+
+        // Step 3: Break it using our chaikin_cut() function
+        let (n1, n2) = chaikin_cut(a, b, ratio);
+
+        if i == 0 {
+            // For the first point of open shapes, ignore vertex A
+            smoothed_line.push(Vec2::new(a.x, a.y));
+            smoothed_line.push(Vec2::new(n2.x, n2.y));
+        } else if i == num_corners - 1 {
+            // For the last point of open shapes, ignore vertex B
+            smoothed_line.push(Vec2::new(n1.x, n1.y));
+            smoothed_line.push(Vec2::new(b.x, b.y));
+        } else {
+            // For all other cases (i.e. interior edges of open
+            // shapes or edges of closed shapes), add both vertices
+            // returned by our chaikin_cut() method
+            smoothed_line.push(Vec2::new(n1.x, n1.y));
+            smoothed_line.push(Vec2::new(n2.x, n2.y));
+        }
+    }
+
+    generate_smooth_line(
+        smoothed_line,
+        column_section_widths,
+        line_index,
+        origin_x,
+        origin_y,
+        vertical_spacing,
+        params,
+        iterations - 1,
+        ratio,
+    )
+}
+
+fn chaikin_cut(a: &Vec2, b: &Vec2, mut ratio: f32) -> (Vec2, Vec2) {
+    // If ratio is greater than 0.5 flip it so we avoid cutting across
+    // the midpoint of the line.
+    if ratio > 0.5 {
+        ratio = 1.0 - ratio;
+    }
+
+    // Find point at a given ratio going from A to B */
+    let xy_1 = Vec2::new(
+        f32::interpolate(a.x, b.x, ratio),
+        f32::interpolate(a.y, b.y, ratio),
+    );
+
+    // Find point at a given ratio going from B to A */
+    let xy_2 = Vec2::new(
+        f32::interpolate(b.x, a.x, ratio),
+        f32::interpolate(b.y, a.y, ratio),
+    );
+
+    return (xy_1, xy_2);
 }
 
 fn update_ui(model: &mut Model) {
@@ -250,7 +374,7 @@ fn update_ui(model: &mut Model) {
     }
 
     if let Some(points_per_line) =
-        dialer(model.point_column_params.points_per_line as f32, 1.0, 999.0)
+        dialer(model.point_column_params.points_per_line as f32, 2.0, 200.0)
             .down(10.0)
             .label("points_per_line")
             .set(model.ids.points_per_line, ui)
@@ -283,7 +407,38 @@ fn update_ui(model: &mut Model) {
         should_refresh_point_columns = true;
     }
 
-    for _click in widget::Button::new()
+    for is_toggled in widget::Toggle::new(model.point_column_params.chaikin_smoothing)
+        .down(10.0)
+        .w_h(300.0, 20.0)
+        .label_font_size(12)
+        .rgb(0.3, 0.3, 0.3)
+        .label_rgb(1.0, 1.0, 1.0)
+        .border(0.0)
+        .label("Toggle Chaikin Smoothing")
+        .set(model.ids.chaikin_smoothing, ui)
+    {
+        model.point_column_params.chaikin_smoothing = is_toggled;
+        should_refresh_point_columns = true;
+    }
+
+    if model.point_column_params.chaikin_smoothing {
+        for ratio in
+            widget::Slider::new(model.point_column_params.chaikin_smoothing_ratio, 0.0, 0.5)
+                .down(10.0)
+                .w_h(300.0, 20.0)
+                .label_font_size(12)
+                .rgb(0.3, 0.3, 0.3)
+                .label_rgb(1.0, 1.0, 1.0)
+                .border(0.0)
+                .label("Smoothing Ratio")
+                .set(model.ids.chaikin_smoothing_ratio, ui)
+        {
+            model.point_column_params.chaikin_smoothing_ratio = ratio;
+            should_refresh_point_columns = true;
+        }
+    }
+
+    for is_toggled in widget::Toggle::new(model.show_viewbox)
         .down(10.0)
         .w_h(300.0, 20.0)
         .label_font_size(12)
@@ -293,7 +448,7 @@ fn update_ui(model: &mut Model) {
         .label("Toggle Viewbox")
         .set(model.ids.toggle_viewbox, ui)
     {
-        model.show_viewbox = !model.show_viewbox;
+        model.show_viewbox = is_toggled;
     }
 
     for _click in widget::Button::new()
@@ -331,7 +486,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     for column in &model.point_columns {
         draw.polyline()
-            .weight(1.0)
+            .weight(3.0)
             .color(BLACK)
             .join_round()
             // do I really have to clone here?
@@ -370,7 +525,7 @@ fn build_svg_document_from_model(
     let mut group = svg::node::element::Group::new()
         .set("fill", "none")
         .set("stroke", "black")
-        .set("stroke-width", 1);
+        .set("stroke-width", "1mm");
 
     for line in point_columns.iter() {
         let data: Vec<_> = line
@@ -388,7 +543,7 @@ fn build_svg_document_from_model(
         .set("height", point_column_params.height)
         .set("fill", "none")
         .set("stroke", "black")
-        .set("stroke-width", 1);
+        .set("stroke-width", "2mm");
 
     doc.add(group).add(bounding_rect)
 }
