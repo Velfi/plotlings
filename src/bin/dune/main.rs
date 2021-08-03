@@ -281,8 +281,7 @@ fn build_svg_document_from_state(state: &State) -> svg::Document {
         .set("stroke", "black")
         .set("stroke-width", 1);
 
-    // Iterator is reversed so that "closer" dunes are drawn first
-    for triangle in state.triangles.iter().rev() {
+    for triangle in state.triangles.iter() {
         let path = triangle.as_svg();
 
         group = group.add(path);
