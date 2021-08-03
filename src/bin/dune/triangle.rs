@@ -68,6 +68,10 @@ impl Triangle {
         let data: Vec<_> = self
             .points
             .iter()
+            // have to loop around to the first point again
+            // so we make a cycle iter and take 4
+            .cycle()
+            .take(4)
             .map(|p| format!("{:.2},{:.2}", p.x, p.y))
             .collect();
 
