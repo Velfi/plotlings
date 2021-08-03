@@ -29,11 +29,11 @@ impl Triangle {
         Self { points }
     }
 
-    pub fn draw(&self, draw: &Draw) {
+    pub fn draw(&self, draw: &Draw, stroke_weight: f32) {
         let points = self.points.iter().cloned();
 
         draw.polyline()
-            .weight(1.0)
+            .weight(stroke_weight)
             .caps_round()
             .points_closed(points);
     }

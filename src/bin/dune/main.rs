@@ -26,6 +26,7 @@ struct State {
     pub width: f32,
     pub show_viewbox: bool,
     pub should_rebuild: bool,
+    pub stroke_weight: f32,
 }
 
 impl State {
@@ -37,6 +38,7 @@ impl State {
             width,
             show_viewbox: false,
             should_rebuild: true,
+            stroke_weight: 3.0,
         }
     }
 
@@ -60,6 +62,7 @@ widget_ids! {
         noise_seed,
         param_title_text,
         skew,
+        stroke_weight,
         toggle_viewbox,
         triangle_count,
         vertical_spacing,
@@ -191,6 +194,15 @@ fn update_ui(model: &mut Model) {
         should_refresh_model = true;
     }
 
+    for stroke_weight in slider(model.state.stroke_weight, 1.0, 12.0)
+        .down(SETTING_MARGIN)
+        .label("Stroke Weight (px)")
+        .set(model.ids.stroke_weight, ui)
+    {
+        model.state.stroke_weight = stroke_weight;
+        should_refresh_model = true;
+    }
+
     for _click in widget::Button::new()
         .down(SETTING_MARGIN)
         .w_h(SETTING_WIDTH, SETTING_HEIGHT)
@@ -252,7 +264,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
         .state
         .triangles
         .iter()
-        .for_each(|triangle| triangle.draw(&triangle_draw));
+        .for_each(|triangle| triangle.draw(&triangle_draw, model.state.stroke_weight));
 
     // Write the result of our drawing to the window's frame.
     draw.to_frame(app, &frame).unwrap();
@@ -269,7 +281,8 @@ fn build_svg_document_from_state(state: &State) -> svg::Document {
         .set("stroke", "black")
         .set("stroke-width", 1);
 
-    for triangle in state.triangles.iter() {
+    // Iterator is reversed so that "closer" dunes are drawn first
+    for triangle in state.triangles.iter().rev() {
         let path = triangle.as_svg();
 
         group = group.add(path);
