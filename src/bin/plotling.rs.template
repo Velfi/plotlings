@@ -1,0 +1,263 @@
+/// A template file for new plotlings
+/// Copy and rename this to create a new plotling
+use anyhow::Context;
+use chrono::Local;
+use log::{debug, error, info, trace, warn};
+use nannou::{prelude::*, ui::prelude::*};
+use rand::{prelude::StdRng, Rng, SeedableRng};
+use std::path::PathBuf;
+
+fn main() {
+    let res = dotenv::dotenv();
+    env_logger::init();
+    if let Err(err) = res {
+        warn!("{}", err)
+    };
+
+    nannou::app(model).update(update).run();
+}
+
+type Tile = usize;
+
+#[derive(Default)]
+struct State {
+    pub tiles: Vec<Tile>,
+    pub tiling_params: TilingParams,
+    pub height: f32,
+    pub width: f32,
+    pub show_viewbox: bool,
+}
+
+impl State {
+    fn update(&mut self) {
+        todo!()
+    }
+
+    fn is_uninitialized(&self) -> bool {
+        todo!()
+    }
+}
+
+struct Model {
+    ui: Ui,
+    ids: Ids,
+    rng: StdRng,
+    pub state: State,
+}
+
+widget_ids! {
+    struct Ids {
+        export_svg,
+        height,
+        toggle_viewbox,
+        width,
+    }
+}
+
+fn model(app: &App) -> Model {
+    // Set the loop mode to wait for events, an energy-efficient option for pure-GUI apps.
+    app.set_loop_mode(LoopMode::Wait);
+
+    let window_id = app
+        .new_window()
+        .size(1920, 1080)
+        .view(view)
+        .build()
+        .expect("couldn't create a window");
+
+    // Create the UI.
+    let mut ui = app.new_ui().window(window_id).build().unwrap();
+
+    // Generate some ids for our widgets.
+    let ids = Ids::new(ui.widget_id_generator());
+    let rng = SeedableRng::from_entropy();
+    let state = Default::default();
+
+    Model {
+        ui,
+        ids,
+        rng,
+        state,
+    }
+}
+
+fn update(_app: &App, model: &mut Model, _update: Update) {
+    update_ui(model);
+    model.state.update();
+
+    if model.state.is_uninitialized() {
+        trace!("State is has not been initialized, doing so now...");
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+struct TilingParams {
+    pub height: f32,
+    pub width: f32,
+}
+
+impl Default for TilingParams {
+    fn default() -> Self {
+        Self {
+            height: 1000.0,
+            width: 1000.0,
+        }
+    }
+}
+
+fn update_ui(model: &mut Model) {
+    // Calling `set_widgets` allows us to instantiate some widgets.
+    let ui = &mut model.ui.set_widgets();
+    let mut should_refresh_model = false;
+
+    fn dialer(val: f32, min: f32, max: f32) -> widget::NumberDialer<'static, f32> {
+        widget::NumberDialer::new(val, min, max, 0)
+            .w_h(300.0, 20.0)
+            .label_font_size(12)
+            .rgb(0.3, 0.3, 0.3)
+            .label_rgb(1.0, 1.0, 1.0)
+            .border(0.0)
+    }
+
+    if let Some(height) = dialer(model.state.tiling_params.height, 1.0, 10_000.0)
+        .down(10.0)
+        .label("height")
+        .set(model.ids.height, ui)
+    {
+        model.state.tiling_params.height = height;
+        should_refresh_model = true;
+    }
+
+    if let Some(width) = dialer(model.state.tiling_params.width, 1.0, 10_000.0)
+        .down(10.0)
+        .label("width")
+        .set(model.ids.width, ui)
+    {
+        model.state.tiling_params.width = width;
+        should_refresh_model = true;
+    }
+
+    for _click in widget::Button::new()
+        .down(10.0)
+        .w_h(300.0, 20.0)
+        .label_font_size(12)
+        .rgb(0.3, 0.3, 0.3)
+        .label_rgb(1.0, 1.0, 1.0)
+        .border(0.0)
+        .label("Toggle Viewbox")
+        .set(model.ids.toggle_viewbox, ui)
+    {
+        model.state.show_viewbox = !model.state.show_viewbox;
+        should_refresh_model = true;
+    }
+
+    for _click in widget::Button::new()
+        .down(10.0)
+        .w_h(300.0, 20.0)
+        .label_font_size(12)
+        .rgb(0.3, 0.3, 0.3)
+        .label_rgb(1.0, 1.0, 1.0)
+        .border(0.0)
+        .label("Export SVG")
+        .set(model.ids.export_svg, ui)
+    {
+        if let Err(err) = export_as_svg(&model.state) {
+            error!("{}", err)
+        }
+    }
+
+    if should_refresh_model {
+        trace!("refresh model called");
+    }
+}
+
+// Draw the state of your `Model` into the given `Frame` here.
+fn view(app: &App, model: &Model, frame: Frame) {
+    // Begin drawing
+    let draw = app.draw();
+
+    draw.background().color(WHITE);
+
+    if model.state.show_viewbox {
+        draw.rect()
+            // we want the box centered on the screen, nannou places rectangle from their center
+            .x_y(0.0, 0.0)
+            .w_h(model.state.width, model.state.height)
+            .stroke(RED)
+            .stroke_weight(2.0)
+            .no_fill();
+    }
+
+    // Write the result of our drawing to the window's frame.
+    draw.to_frame(app, &frame).unwrap();
+
+    // Draw the state of the `Ui` to the frame.
+    model.ui.draw_to_frame(app, &frame).unwrap();
+}
+
+fn build_svg_document_from_state(state: &State) -> svg::Document {
+    let doc = svg::Document::new().set("viewBox", (0, 0, state.width, state.height));
+
+    let mut group = svg::node::element::Group::new()
+        .set("fill", "none")
+        .set("stroke", "black")
+        .set("stroke-width", 1);
+
+    // for line in point_columns.iter() {
+    //     let data: Vec<_> = line
+    //         .iter()
+    //         .map(|p| format!("{:.2},{:.2}", p.x, p.y))
+    //         .collect();
+
+    //     let path = Polyline::new().set("points", data.join(" "));
+
+    //     group = group.add(path);
+    // }
+
+    let bounding_rect = svg::node::element::Rectangle::new()
+        .set("width", state.width)
+        .set("height", state.height)
+        .set("fill", "none")
+        .set("stroke", "black")
+        .set("stroke-width", 1);
+
+    doc.add(group).add(bounding_rect)
+}
+
+fn export_as_svg(state: &State) -> Result<(), anyhow::Error> {
+    info!("exporting image as SVG...");
+    let document = build_svg_document_from_state(state);
+    let base_path = std::env::var("SVG_EXPORT_DIRECTORY").context("setting 'SVG_EXPORT_DIRECTORY' is required, please set it to the directory you wish to export SVGs to")?;
+    let current_date = Local::today().format("%Y-%m-%d");
+    let svg_filename = format!("{}-plotling.svg", &current_date);
+    let mut svg_filepath: PathBuf = [base_path, svg_filename].iter().collect();
+
+    // I don't want to silently overwrite anything so I look for an unused filename,
+    // incrementing the counter until I find an unused number
+    // I could have also used a random string/number, I just like this better
+    if svg_filepath.exists() {
+        let mut counter = 1;
+
+        while svg_filepath.exists() {
+            if counter > 100 {
+                debug!(
+                    "export_as_svg counter has reached {}, you're not in an infinite loop are you?",
+                    counter
+                );
+            }
+
+            let _ = svg_filepath.pop();
+            let svg_filename = format!("{}-plotling-{}.svg", &current_date, &counter);
+            svg_filepath.push(svg_filename);
+            counter += 1;
+        }
+    }
+
+    svg::save(&svg_filepath, &document)?;
+    info!(
+        "SVG successfully exported to {}",
+        &svg_filepath.to_string_lossy()
+    );
+
+    Ok(())
+}

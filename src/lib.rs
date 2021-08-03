@@ -60,3 +60,39 @@ impl Interpolate for f32 {
         }
     }
 }
+
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
+pub enum MouseButtonState {
+    JustPressed,
+    HeldDown,
+    JustReleased,
+    Released,
+}
+
+impl MouseButtonState {
+    pub fn update(&mut self, button_is_pressed: bool) {
+        use MouseButtonState::*;
+
+        if button_is_pressed {
+            match self {
+                JustPressed => *self = HeldDown,
+                JustReleased | Released => *self = JustPressed,
+                _ => (),
+            }
+        } else {
+            match self {
+                JustReleased => *self = Released,
+                JustPressed | HeldDown => *self = JustReleased,
+                _ => (),
+            }
+        }
+    }
+
+    pub fn is_pressed(&self) -> bool {
+        *self == MouseButtonState::JustPressed || *self == MouseButtonState::HeldDown
+    }
+
+    pub fn is_just_pressed(&self) -> bool {
+        *self == MouseButtonState::JustPressed
+    }
+}

@@ -10,10 +10,13 @@ edition = "2018"
 name = "lib_plotings"
 
 [[bin]]
-name = "line_groups"
+name = "circle_packing"
 
 [[bin]]
-name = "circle_packing"
+name = "dune"
+
+[[bin]]
+name = "line_groups"
 
 [[bin]]
 name = "maze"

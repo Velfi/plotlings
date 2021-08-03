@@ -4,8 +4,10 @@ mod wall;
 
 use anyhow::Context;
 use chrono::Local;
+use lib_plotings::{map_t_of_range_a_to_range_b, MouseButtonState};
 use log::{debug, error, info, trace, warn};
 use maze::Maze;
+use nannou::lyon::geom::euclid::num::Round;
 use nannou::{prelude::*, ui::prelude::*};
 use params::MazeParams;
 use rand::{prelude::StdRng, SeedableRng};
@@ -29,6 +31,9 @@ pub struct Model {
     pub params: MazeParams,
     pub maze: Maze,
     pub show_viewbox: bool,
+    pub mouse_xy: Point2,
+    pub mouse_button_l: MouseButtonState,
+    mouse_button_l_secret_state: bool,
 }
 
 widget_ids! {
@@ -47,6 +52,9 @@ fn model(app: &App) -> Model {
         .new_window()
         .size(1920, 1080)
         .view(view)
+        .mouse_moved(mouse_moved)
+        .mouse_pressed(mouse_pressed)
+        .mouse_released(mouse_released)
         .build()
         .expect("couldn't create a window");
 
@@ -67,13 +75,70 @@ fn model(app: &App) -> Model {
         maze,
         params,
         show_viewbox: false,
+        mouse_xy: Default::default(),
+        mouse_button_l: MouseButtonState::Released,
+        mouse_button_l_secret_state: false,
+    }
+}
+
+pub fn mouse_moved(_app: &App, model: &mut Model, position: Point2) {
+    model.mouse_xy = position;
+}
+
+pub fn mouse_pressed(_app: &App, model: &mut Model, button: MouseButton) {
+    match button {
+        MouseButton::Left => {
+            model.mouse_button_l_secret_state = true;
+        }
+        _ => trace!("unhandled mouse press event: {:?}", button),
+    }
+}
+
+pub fn mouse_released(_app: &App, model: &mut Model, button: MouseButton) {
+    match button {
+        MouseButton::Left => {
+            model.mouse_button_l_secret_state = false;
+        }
+        _ => trace!("unhandled mouse release event: {:?}", button),
     }
 }
 
 fn update(_app: &App, model: &mut Model, _update: Update) {
     update_ui(model);
-    let rng = &mut *model.rng.borrow_mut();
-    model.maze.update(&model.params, rng)
+
+    model
+        .mouse_button_l
+        .update(model.mouse_button_l_secret_state);
+
+    let mouse_tile_position = screen_xy_to_tile_position(&model.mouse_xy, &model.params);
+
+    model
+        .maze
+        .update(&model.params, mouse_tile_position, model.mouse_button_l)
+}
+
+pub fn screen_xy_to_tile_position(xy: &Point2, params: &MazeParams) -> Option<Point2> {
+    let rect = nannou::geom::Rect::from_x_y_w_h(0.0, 0.0, params.width(), params.height());
+
+    if rect.contains(*xy) {
+        let x = map_t_of_range_a_to_range_b(
+            xy.x - params.grid_cell_width as f32 / 2.0,
+            rect.left()..rect.right(),
+            0.0..(params.columns as f32),
+        )
+        .round();
+        let y = map_t_of_range_a_to_range_b(
+            xy.y - params.grid_cell_height as f32 / 2.0,
+            rect.bottom()..rect.top(),
+            0.0..(params.rows as f32),
+        )
+        .round();
+        let xy = pt2(x, y);
+
+        Some(xy)
+    } else {
+        None
+    }
 }
 
 fn update_ui(model: &mut Model) {
