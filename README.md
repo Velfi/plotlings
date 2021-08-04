@@ -8,10 +8,29 @@ Rust is required. To export to SVG, set the `SVG_EXPORT_DIRECTORY` environment v
 
 ## Generators
 
-### Striped Columns
+### Line Groups
 
-![Striped Columns](/previews/striped_columns.png)
+Run it with this command: `cargo run release --bin line_groups`
 
-The first one I created for this project. It generates columns of lines that look neat.
+![Line Groups](/previews/line_groups.png)
 
+The first one I created for this project. It generates groups of lines that look neat.
+
+### Maze
+
+Run it with this command: `cargo run release --bin maze`
+
+![Maze](/previews/maze.png)
+
+Based on the classic maze BASIC program.
+
+### Dune
+
+Run it with this command: `cargo run release --bin dune`
+
+![Dune](/previews/dune.png)
+
+A naïve recreation of [Sohan Murthy's Continuity Correction][continuity-correction] that ended up going in a new direction.
+
+[continuity-correction]: https://sohan.space/portfolio/continuity-correction/
 [AxiDraw V3]: https://shop.evilmadscientist.com/productsmenu/846
