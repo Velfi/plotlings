@@ -176,7 +176,7 @@ fn update_ui(model: &mut Model) {
         should_refresh_model = true;
     }
 
-    for noise_seed in slider(model.state.triangle_params.noise_seed as f32, -1.0, 1.0)
+    for noise_seed in slider(model.state.triangle_params.noise_seed as f32, 0.0, 5.0)
         .down(SETTING_MARGIN)
         .label("Noise")
         .set(model.ids.noise_seed, ui)

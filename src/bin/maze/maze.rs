@@ -1,7 +1,7 @@
 use crate::params::MazeParams;
 use crate::wall::Wall;
 use lib_plotings::MouseButtonState;
-use log::{info, trace};
+use log::trace;
 use nannou::prelude::*;
 use rand::Rng;
 
@@ -21,7 +21,7 @@ impl Maze {
 
     pub fn update(
         &mut self,
-        params: &MazeParams,
+        _params: &MazeParams,
         mouse_tile_position: Option<Point2>,
         mouse_button_state: MouseButtonState,
     ) {

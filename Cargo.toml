@@ -8,6 +8,7 @@ edition = "2018"
 
 [lib]
 name = "lib_plotings"
+path = "./src/lib/mod.rs"
 
 [[bin]]
 name = "circle_packing"
@@ -29,6 +30,7 @@ env_logger = "0.9.0"
 log = "0.4.14"
 nannou = "0.17.1"
 noise = "0.7.0"
+once_cell = "1.8.0"
 rand = "0.8.3"
 splines = "4.0.3"
 svg = "0.10.0"

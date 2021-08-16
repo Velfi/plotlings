@@ -1,17 +1,19 @@
-mod maze;
+mod fixed_body;
+mod massive;
+mod orbiter;
 mod params;
-mod wall;
+mod system;
 
 use anyhow::Context;
 use chrono::Local;
-use lib_plotings::{map_t_of_range_a_to_range_b, MouseButtonState};
+use lib_plotings::MouseButtonState;
 use log::{debug, error, info, trace, warn};
-use maze::Maze;
 use nannou::{prelude::*, ui::prelude::*};
-use params::MazeParams;
+use params::Params;
 use rand::{prelude::StdRng, SeedableRng};
 use std::path::PathBuf;
 use std::{cell::RefCell, mem};
+use system::System;
 
 fn main() {
     let res = dotenv::dotenv();
@@ -27,8 +29,8 @@ pub struct Model {
     ui: Ui,
     ids: Ids,
     rng: RefCell<StdRng>,
-    pub params: MazeParams,
-    pub maze: Maze,
+    pub params: Params,
+    pub system: System,
     pub show_viewbox: bool,
     pub mouse_xy: Point2,
     pub mouse_button_l: MouseButtonState,
@@ -43,6 +45,8 @@ widget_ids! {
         noise_seed,
         rows,
         toggle_viewbox,
+        restart,
+        starting_velocity,
     }
 }
 
@@ -62,16 +66,16 @@ fn model(app: &App) -> Model {
 
     // Generate some ids for our widgets.
     let ids = Ids::new(ui.widget_id_generator());
-    let params = MazeParams::default();
+    let params = Params::default();
     let mut rng: StdRng = SeedableRng::seed_from_u64(params.rng_seed);
-    let maze = Maze::new(&params, &mut rng);
+    let system = System::new_from_params(&params, &mut rng);
     let rng = RefCell::new(rng);
 
     Model {
         ui,
         ids,
         rng,
-        maze,
+        system,
         params,
         show_viewbox: false,
         mouse_xy: Default::default(),
@@ -109,42 +113,16 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
         .mouse_button_l
         .update(model.mouse_button_l_secret_state);
 
-    let mouse_tile_position = screen_xy_to_tile_position(&model.mouse_xy, &model.params);
-
     model
-        .maze
-        .update(&model.params, mouse_tile_position, model.mouse_button_l)
-}
-
-pub fn screen_xy_to_tile_position(xy: &Point2, params: &MazeParams) -> Option<Point2> {
-    let rect = nannou::geom::Rect::from_x_y_w_h(0.0, 0.0, params.width(), params.height());
-
-    if rect.contains(*xy) {
-        let x = map_t_of_range_a_to_range_b(
-            xy.x - params.grid_cell_width as f32 / 2.0,
-            rect.left()..rect.right(),
-            0.0..(params.columns as f32),
-        )
-        .round();
-        let y = map_t_of_range_a_to_range_b(
-            xy.y - params.grid_cell_height as f32 / 2.0,
-            rect.bottom()..rect.top(),
-            0.0..(params.rows as f32),
-        )
-        .round();
-        let xy = pt2(x, y);
-
-        Some(xy)
-    } else {
-        None
-    }
+        .system
+        .update(&model.params, Some(model.mouse_xy), model.mouse_button_l)
 }
 
 fn update_ui(model: &mut Model) {
     // Calling `set_widgets` allows us to instantiate some widgets.
     let mut ui_cell = model.ui.set_widgets();
     let ui = &mut ui_cell;
-    let should_refresh_maze = false;
+    let mut should_refresh_system = false;
 
     // fn dialer(val: f32, min: f32, max: f32) -> widget::NumberDialer<'static, f32> {
     //     widget::NumberDialer::new(val, min, max, 0)
@@ -161,7 +139,7 @@ fn update_ui(model: &mut Model) {
     //     .set(model.ids.noise_seed, ui)
     // {
     //     model.point_column_params.noise_seed = noise_seed as u64;
-    //     should_refresh_maze = true;
+    //     should_refresh_system = true;
     // }
 
     // if let Some(lines_per_column) = dialer(
@@ -174,7 +152,7 @@ fn update_ui(model: &mut Model) {
     // .set(model.ids.lines_per_column, ui)
     // {
     //     model.point_column_params.lines_per_column = lines_per_column as usize;
-    //     should_refresh_maze = true;
+    //     should_refresh_system = true;
     // }
 
     // if let Some(column_spacing) = dialer(model.point_column_params.column_spacing, 0.0, 10_000.0)
@@ -183,7 +161,7 @@ fn update_ui(model: &mut Model) {
     //     .set(model.ids.column_spacing, ui)
     // {
     //     model.point_column_params.column_spacing = column_spacing;
-    //     should_refresh_maze = true;
+    //     should_refresh_system = true;
     // }
 
     // if let Some(height) = dialer(model.point_column_params.height, 0.0, 10_000.0)
@@ -192,7 +170,7 @@ fn update_ui(model: &mut Model) {
     //     .set(model.ids.height, ui)
     // {
     //     model.point_column_params.height = height;
-    //     should_refresh_maze = true;
+    //     should_refresh_system = true;
     // }
 
     // if let Some(width) = dialer(model.point_column_params.width, 0.0, 10_000.0)
@@ -201,7 +179,7 @@ fn update_ui(model: &mut Model) {
     //     .set(model.ids.width, ui)
     // {
     //     model.point_column_params.width = width;
-    //     should_refresh_maze = true;
+    //     should_refresh_system = true;
     // }
 
     // if let Some(column_width) = dialer(model.point_column_params.column_width, 0.0, 1000.0)
@@ -210,7 +188,7 @@ fn update_ui(model: &mut Model) {
     //     .set(model.ids.column_width, ui)
     // {
     //     model.point_column_params.column_width = column_width;
-    //     should_refresh_maze = true;
+    //     should_refresh_system = true;
     // }
 
     // if let Some(number_of_columns) = dialer(
@@ -223,7 +201,7 @@ fn update_ui(model: &mut Model) {
     // .set(model.ids.number_of_columns, ui)
     // {
     //     model.point_column_params.number_of_columns = number_of_columns as usize;
-    //     should_refresh_maze = true;
+    //     should_refresh_system = true;
     // }
 
     // if let Some(points_per_line) =
@@ -233,7 +211,7 @@ fn update_ui(model: &mut Model) {
     //         .set(model.ids.points_per_line, ui)
     // {
     //     model.point_column_params.points_per_line = points_per_line as usize;
-    //     should_refresh_maze = true;
+    //     should_refresh_system = true;
     // }
 
     // if let Some(column_alignment) =
@@ -248,7 +226,7 @@ fn update_ui(model: &mut Model) {
     //         .set(model.ids.column_alignment, ui)
     // {
     //     model.point_column_params.column_alignment = column_alignment;
-    //     should_refresh_maze = true;
+    //     should_refresh_system = true;
     // }
 
     // if let Some(vertical_jitter) = dialer(model.point_column_params.vertical_jitter, 1.0, 100.0)
@@ -257,8 +235,22 @@ fn update_ui(model: &mut Model) {
     //     .set(model.ids.vertical_jitter, ui)
     // {
     //     model.point_column_params.vertical_jitter = vertical_jitter;
-    //     should_refresh_maze = true;
+    //     should_refresh_system = true;
     // }
+
+    for _click in widget::Button::new()
+        // .down(10.0)
+        .top_left_with_margin(20.0)
+        .w_h(300.0, 20.0)
+        .label_font_size(12)
+        .rgb(0.3, 0.3, 0.3)
+        .label_rgb(1.0, 1.0, 1.0)
+        .border(0.0)
+        .label("Restart")
+        .set(model.ids.restart, ui)
+    {
+        should_refresh_system = true;
+    }
 
     for _click in widget::Button::new()
         // .down(10.0)
@@ -284,23 +276,23 @@ fn update_ui(model: &mut Model) {
         .label("Export SVG")
         .set(model.ids.export_svg, ui)
     {
-        if let Err(err) = export_as_svg(&model.params, &model.maze) {
+        if let Err(err) = export_as_svg(&model.params, &model.system) {
             error!("{}", err)
         }
     }
 
     mem::drop(ui_cell);
 
-    if should_refresh_maze {
+    if should_refresh_system {
         let rng = &mut *model.rng.borrow_mut();
-        let maze = Maze::new(&model.params, rng);
+        let system = System::new_from_params(&model.params, rng);
         // TODO do I need to manually drop here or is the compiler smart enough?
         mem::drop(rng);
 
-        model.maze = maze;
+        model.system = system;
         trace!(
-            "should_refresh_maze=true, creating maze with {} lines",
-            model.maze.walls().len()
+            "should_refresh_system=true, creating {} orbiter(s)",
+            model.system.orbiters().len()
         );
     }
 }
@@ -312,13 +304,13 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     draw.background().color(WHITE);
 
-    model.maze.draw(&draw, &model.params);
+    model.system.draw(&draw, &model.params);
 
     if model.show_viewbox {
         draw.rect()
             // we want the box centered on the screen, nannou places rectangle from their center
             .x_y(0.0, 0.0)
-            .w_h(model.params.width(), model.params.height())
+            .w_h(model.params.width, model.params.height)
             .stroke(RED)
             .stroke_weight(2.0)
             .no_fill()
@@ -332,25 +324,22 @@ fn view(app: &App, model: &Model, frame: Frame) {
     model.ui.draw_to_frame(app, &frame).unwrap();
 }
 
-fn build_svg_document_from_model(params: &MazeParams, maze: &Maze) -> svg::Document {
-    let viewbox_width = params.grid_cell_width * params.columns;
-    let viewbox_height = params.grid_cell_height * params.rows;
-
-    let doc = svg::Document::new().set("viewBox", (0, 0, viewbox_width, viewbox_height));
-    let maze = maze.svg(params);
+fn build_svg_document_from_model(params: &Params, system: &System) -> svg::Document {
+    let doc = svg::Document::new().set("viewBox", (0, 0, params.width, params.height));
+    let system = system.svg(params);
     let bounding_rect = svg::node::element::Rectangle::new()
-        .set("width", viewbox_width)
-        .set("height", viewbox_height)
+        .set("width", params.width)
+        .set("height", params.height)
         .set("fill", "none")
         .set("stroke", "black")
         .set("stroke-width", "2mm");
 
-    doc.add(maze).add(bounding_rect)
+    doc.add(system).add(bounding_rect)
 }
 
-fn export_as_svg(params: &MazeParams, maze: &Maze) -> Result<(), anyhow::Error> {
+fn export_as_svg(params: &Params, system: &System) -> Result<(), anyhow::Error> {
     info!("exporting image as SVG...");
-    let document = build_svg_document_from_model(params, maze);
+    let document = build_svg_document_from_model(params, system);
     let base_path = std::env::var("SVG_EXPORT_DIRECTORY").context("setting 'SVG_EXPORT_DIRECTORY' is required, please set it to the directory you wish to export SVGs to")?;
     let current_date = Local::today().format("%Y-%m-%d");
     let svg_filename = format!("{}-plotling.svg", &current_date);

@@ -1944,6 +1944,7 @@ dependencies = [
  "log",
  "nannou",
  "noise",
+ "once_cell",
  "rand 0.8.4",
  "splines",
  "svg",

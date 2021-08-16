@@ -1,3 +1,6 @@
+pub mod interval;
+pub mod svg;
+
 use std::ops::{Add, Div, Mul, Range, Sub};
 
 pub fn get_wrapping_index(x: isize, y: isize, width: usize, height: usize) -> usize {
