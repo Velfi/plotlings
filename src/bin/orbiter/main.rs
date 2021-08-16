@@ -39,11 +39,8 @@ pub struct Model {
 
 widget_ids! {
     struct Ids {
-        columns,
         export_svg,
-        grid_cell_size,
         noise_seed,
-        rows,
         toggle_viewbox,
         restart,
         starting_velocity,
