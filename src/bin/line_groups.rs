@@ -288,19 +288,19 @@ fn chaikin_cut(a: &Vec2, b: &Vec2, mut ratio: f32) -> (Vec2, Vec2) {
     return (xy_1, xy_2);
 }
 
+fn dialer(val: f32, min: f32, max: f32) -> widget::NumberDialer<'static, f32> {
+    widget::NumberDialer::new(val, min, max, 0)
+        .w_h(300.0, 20.0)
+        .label_font_size(12)
+        .rgb(0.3, 0.3, 0.3)
+        .label_rgb(1.0, 1.0, 1.0)
+        .border(0.0)
+}
+
 fn update_ui(model: &mut Model) {
     // Calling `set_widgets` allows us to instantiate some widgets.
     let ui = &mut model.ui.set_widgets();
     let mut should_refresh_point_columns = false;
-
-    fn dialer(val: f32, min: f32, max: f32) -> widget::NumberDialer<'static, f32> {
-        widget::NumberDialer::new(val, min, max, 0)
-            .w_h(300.0, 20.0)
-            .label_font_size(12)
-            .rgb(0.3, 0.3, 0.3)
-            .label_rgb(1.0, 1.0, 1.0)
-            .border(0.0)
-    }
 
     if let Some(noise_seed) = dialer(model.point_column_params.noise_seed as f32, 0.0, 999_9999.0)
         .label("Noise Seed")

@@ -32,5 +32,11 @@ Run it with this command: `cargo run release --bin dune`
 
 A naïve recreation of [Sohan Murthy's Continuity Correction][continuity-correction] that ended up going in a new direction.
 
+### Line Noise
+
+Run it with this command: `cargo run release --bin line_noise`
+
+![Line Noise](/previews/line_noise.png)
+
 [continuity-correction]: https://sohan.space/portfolio/continuity-correction/
 [AxiDraw V3]: https://shop.evilmadscientist.com/productsmenu/846
